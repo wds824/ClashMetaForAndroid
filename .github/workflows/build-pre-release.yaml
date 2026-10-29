@@ -8,9 +8,13 @@ on:
 jobs:
   BuildPreRelease:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Checkout submodules
         run: git submodule update --init --recursive --force
@@ -56,13 +60,14 @@ jobs:
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
-          touch signing.properties
-          echo keystore.password="$SIGNING_STORE_PASSWORD" > signing.properties
-          echo key.alias="$SIGNING_KEY_ALIAS" >> signing.properties
-          echo key.password="$SIGNING_KEY_PASSWORD" >> signing.properties
-            
-          echo "cat signing.properties"
-          cat signing.properties
+          if [ -n "$SIGNING_STORE_PASSWORD" ]; then
+            touch signing.properties
+            echo keystore.password="$SIGNING_STORE_PASSWORD" > signing.properties
+            echo key.alias="$SIGNING_KEY_ALIAS" >> signing.properties
+            echo key.password="$SIGNING_KEY_PASSWORD" >> signing.properties
+            echo "cat signing.properties"
+            cat signing.properties
+          fi
 
       - name: Pre-release Build
         if: success()

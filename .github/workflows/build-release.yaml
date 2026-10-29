@@ -10,11 +10,15 @@ on:
 jobs:
   BuildRelease:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Checkout submodules
         run: git submodule update --init --recursive --force
@@ -70,17 +74,17 @@ jobs:
       # If any change found, commit it and push
       - name: Commit and push if changes
         run: |
-          changes=$(git diff --name-only origin/main | wc -l)
+          changes=$(git status --porcelain | wc -l)
           if [ $changes -gt 0 ]
           then
             newVersionName=${{ steps.process-version.outputs.versonName }}
             newVersionCode=${{ steps.process-version.outputs.versonCode }}
-            git config --global user.name 'GitHub Action'
-            git config --global user.email 'action@github.com'
+            git config --global user.name 'github-actions[bot]'
+            git config --global user.email 'github-actions[bot]@users.noreply.github.com'
             git add build.gradle.kts
             git commit -am "Bump version to $newVersionName ($newVersionCode)"
             git tag "v$newVersionName"
-            git push --follow-tags
+            git push origin HEAD:${{ github.ref_name }} --follow-tags
           fi
 
       - name: Update CA
@@ -95,13 +99,14 @@ jobs:
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
-          touch signing.properties
-          echo keystore.password="$SIGNING_STORE_PASSWORD" > signing.properties
-          echo key.alias="$SIGNING_KEY_ALIAS" >> signing.properties
-          echo key.password="$SIGNING_KEY_PASSWORD" >> signing.properties
-            
-          echo "cat signing.properties"
-          cat signing.properties
+          if [ -n "$SIGNING_STORE_PASSWORD" ]; then
+            touch signing.properties
+            echo keystore.password="$SIGNING_STORE_PASSWORD" > signing.properties
+            echo key.alias="$SIGNING_KEY_ALIAS" >> signing.properties
+            echo key.password="$SIGNING_KEY_PASSWORD" >> signing.properties
+            echo "cat signing.properties"
+            cat signing.properties
+          fi
 
       - name: Release Build
         if: success()
