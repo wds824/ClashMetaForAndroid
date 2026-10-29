@@ -3,6 +3,7 @@ package tunnel
 import (
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/dlclark/regexp2"
 
@@ -165,6 +166,41 @@ func PatchSelector(selector, name string) bool {
 	return true
 }
 
+func getProxyDelay(p C.Proxy) int {
+	var resetTime time.Time
+	if v, ok := proxyResetTimes.Load(p.Name()); ok {
+		resetTime = v.(time.Time)
+	}
+
+	var latestTime time.Time
+	var latestDelay uint16
+	var found bool
+
+	for _, state := range p.ExtraDelayHistories() {
+		if len(state.History) == 0 {
+			continue
+		}
+		last := state.History[len(state.History)-1]
+		if last.Time.Before(resetTime) {
+			continue
+		}
+		if !found || last.Time.After(latestTime) {
+			found = true
+			latestTime = last.Time
+			if state.Alive && last.Delay > 0 {
+				latestDelay = last.Delay
+			} else {
+				latestDelay = 0xffff
+			}
+		}
+	}
+
+	if !found || latestDelay == 0 {
+		return 0xffff
+	}
+	return int(latestDelay)
+}
+
 func convertProxies(proxies []C.Proxy, uiSubtitlePattern *regexp2.Regexp) []*Proxy {
 	result := make([]*Proxy, 0, 128)
 
@@ -183,13 +219,6 @@ func convertProxies(proxies []C.Proxy, uiSubtitlePattern *regexp2.Regexp) []*Pro
 				}
 			}
 		}
-		testURL := "https://www.gstatic.com/generate_204"
-		for k := range p.ExtraDelayHistories() {
-			if len(k) > 0 {
-				testURL = k
-				break
-			}
-		}
 		_, isGroup := p.Adapter().(outboundgroup.ProxyGroup)
 
 		result = append(result, &Proxy{
@@ -197,7 +226,7 @@ func convertProxies(proxies []C.Proxy, uiSubtitlePattern *regexp2.Regexp) []*Pro
 			Title:    strings.TrimSpace(title),
 			Subtitle: strings.TrimSpace(subtitle),
 			Type:     p.Type().String(),
-			Delay:    int(p.LastDelayForTestUrl(testURL)),
+			Delay:    getProxyDelay(p),
 			IsGroup:  isGroup,
 		})
 	}
@@ -224,13 +253,6 @@ func collectProviders(providers []provider.ProxyProvider, uiSubtitlePattern *reg
 				}
 			}
 
-			testURL := "https://www.gstatic.com/generate_204"
-			for k := range px.ExtraDelayHistories() {
-				if len(k) > 0 {
-					testURL = k
-					break
-				}
-			}
 			_, isGroup := px.Adapter().(outboundgroup.ProxyGroup)
 
 			result = append(result, &Proxy{
@@ -238,7 +260,7 @@ func collectProviders(providers []provider.ProxyProvider, uiSubtitlePattern *reg
 				Title:    strings.TrimSpace(title),
 				Subtitle: strings.TrimSpace(subtitle),
 				Type:     px.Type().String(),
-				Delay:    int(px.LastDelayForTestUrl(testURL)),
+				Delay:    getProxyDelay(px),
 				IsGroup:  isGroup,
 			})
 		}

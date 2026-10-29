@@ -25,6 +25,35 @@ class ProxyPageAdapter(
 
     val states = List(adapters.size) { ProxyPageState() }
 
+    suspend fun clearDelays(position: Int) {
+        withContext(Dispatchers.Main) {
+            adapters[position].states.forEach { state ->
+                state.proxy = state.proxy.copy(delay = 0xffff)
+            }
+            requestRedrawVisible()
+        }
+    }
+
+    suspend fun updateDelays(position: Int, proxies: List<Proxy>) {
+        val proxyMap = withContext(Dispatchers.Default) {
+            proxies.associateBy { it.name }
+        }
+
+        withContext(Dispatchers.Main) {
+            var changed = false
+            adapters[position].states.forEach { state ->
+                val updated = proxyMap[state.proxy.name]
+                if (updated != null && updated.delay != state.proxy.delay) {
+                    state.proxy = updated
+                    changed = true
+                }
+            }
+            if (changed) {
+                requestRedrawVisible()
+            }
+        }
+    }
+
     suspend fun updateAdapter(
         position: Int,
         proxies: List<Proxy>,
@@ -32,6 +61,26 @@ class ProxyPageAdapter(
         parent: ProxyState,
         links: Map<String, ProxyState>
     ) {
+        val currentStates = withContext(Dispatchers.Main) {
+            adapters[position].states
+        }
+
+        val sameOrder = withContext(Dispatchers.Default) {
+            currentStates.size == proxies.size &&
+                currentStates.indices.all { currentStates[it].proxy.name == proxies[it].name }
+        }
+
+        if (sameOrder) {
+            withContext(Dispatchers.Main) {
+                adapters[position].selectable = selectable
+                currentStates.indices.forEach { idx ->
+                    currentStates[idx].proxy = proxies[idx]
+                }
+                requestRedrawVisible()
+            }
+            return
+        }
+
         val states = withContext(Dispatchers.Default) {
             proxies.map {
                 val link = if (it.isGroup) links[it.name] else null

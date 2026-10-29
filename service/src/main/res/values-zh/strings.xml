@@ -16,4 +16,5 @@
     <string name="profile_updating">配置更新中</string>
     <string name="profile_service_status">配置文件服务状态</string>
     <string name="profile_process_result">配置文件处理结果</string>
+    <string name="new_profile">新配置</string>
 </resources>

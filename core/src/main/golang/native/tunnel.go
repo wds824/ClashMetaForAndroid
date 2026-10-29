@@ -67,11 +67,14 @@ func queryGroup(name C.c_string, sortMode C.c_string) *C.char {
 
 //export healthCheck
 func healthCheck(completable unsafe.Pointer, name C.c_string) {
+	n := C.GoString(name)
+	tunnel.ResetHealthCheck(n)
+
 	go func(name string) {
 		tunnel.HealthCheck(name)
 
 		C.complete(completable, nil)
-	}(C.GoString(name))
+	}(n)
 }
 
 //export healthCheckAll

@@ -11,7 +11,7 @@ import kotlin.math.max
 
 class ProxyViewState(
     val config: ProxyViewConfig,
-    val proxy: Proxy,
+    var proxy: Proxy,
     private val parent: ProxyState,
     private val link: ProxyState?
 ) {

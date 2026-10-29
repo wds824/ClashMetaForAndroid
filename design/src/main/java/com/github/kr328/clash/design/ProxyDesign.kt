@@ -78,6 +78,14 @@ class ProxyDesign(
         updateUrlTestButtonStatus()
     }
 
+    suspend fun clearGroupDelays(position: Int) {
+        adapter.clearDelays(position)
+    }
+
+    suspend fun updateGroupDelays(position: Int, proxies: List<Proxy>) {
+        adapter.updateDelays(position, proxies)
+    }
+
     suspend fun requestRedrawVisible() {
         withContext(Dispatchers.Main) {
             adapter.requestRedrawVisible()
@@ -153,6 +161,8 @@ class ProxyDesign(
     }
 
     fun requestUrlTesting() {
+        if (urlTesting) return
+
         urlTesting = true
 
         requests.trySend(Request.UrlTest(binding.pagesView.currentItem))

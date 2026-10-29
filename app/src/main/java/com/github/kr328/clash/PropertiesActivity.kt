@@ -1,6 +1,5 @@
 package com.github.kr328.clash
 
-import com.github.kr328.clash.common.util.UrlTitleResolver
 import com.github.kr328.clash.common.util.intent
 import com.github.kr328.clash.common.util.setUUID
 import com.github.kr328.clash.common.util.uuid
@@ -82,13 +81,6 @@ class PropertiesActivity : BaseActivity<PropertiesDesign>() {
     }
 
     private suspend fun PropertiesDesign.verifyAndCommit() {
-        if (profile.type != Profile.Type.File && (profile.name.isBlank() || profile.name == getString(R.string.new_profile))) {
-            val extracted = UrlTitleResolver.extractTitleFromUrl(profile.source)
-            if (!extracted.isNullOrBlank()) {
-                profile = profile.copy(name = extracted)
-            }
-        }
-
         when {
             profile.type == Profile.Type.File && profile.name.isBlank() -> {
                 showToast(R.string.empty_name, ToastDuration.Long)
@@ -100,23 +92,6 @@ class PropertiesActivity : BaseActivity<PropertiesDesign>() {
                 try {
                     withProcessing { updateStatus ->
                         withProfile {
-                            var resolvedName = profile.name
-                            if (profile.type != Profile.Type.File && (resolvedName.isBlank() || resolvedName == getString(R.string.new_profile))) {
-                                val fetched = UrlTitleResolver.fetchTitleFromUrl(profile.source, timeoutMs = 3000)
-                                if (!fetched.isNullOrBlank()) {
-                                    resolvedName = fetched
-                                } else {
-                                    val extracted = UrlTitleResolver.extractTitleFromUrl(profile.source)
-                                    if (!extracted.isNullOrBlank()) {
-                                        resolvedName = extracted
-                                    }
-                                }
-                            }
-                            if (resolvedName.isBlank()) {
-                                resolvedName = getString(R.string.new_profile)
-                            }
-                            profile = profile.copy(name = resolvedName)
-
                             patch(profile.uuid, profile.name, profile.source, profile.interval, profile.ageSecretKey)
 
                             coroutineScope {

@@ -8,7 +8,6 @@ import android.provider.Settings
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import com.github.kr328.clash.common.constants.Intents
-import com.github.kr328.clash.common.util.UrlTitleResolver
 import com.github.kr328.clash.common.util.intent
 import com.github.kr328.clash.common.util.setUUID
 import com.github.kr328.clash.design.NewProfileDesign
@@ -59,7 +58,7 @@ class NewProfileActivity : BaseActivity<NewProfileDesign>() {
                                         create(Profile.Type.File, name)
 
                                     is ProfileProvider.Url ->
-                                        create(Profile.Type.Url, name)
+                                        create(Profile.Type.Url, "")
 
                                     is ProfileProvider.QR -> {
                                         null
@@ -187,18 +186,12 @@ class NewProfileActivity : BaseActivity<NewProfileDesign>() {
     }
 
     private suspend fun createProfileByQrCode(url: String) {
-        val parsed = UrlTitleResolver.parseInstallConfig(url)
-        val finalUrl = parsed?.first ?: url
-        val title = parsed?.second
-            ?: UrlTitleResolver.extractTitleFromUrl(finalUrl)
-            ?: getString(R.string.new_profile)
-
         withProfile {
             launchProperties(
                 create(
                     type = Profile.Type.Url,
-                    name = title,
-                    finalUrl,
+                    name = "",
+                    url,
                 )
             )
         }

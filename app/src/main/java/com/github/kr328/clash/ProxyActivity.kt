@@ -104,29 +104,23 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
                             }
                             urlTestJobs[groupIndex] = launch {
                                 try {
+                                    design.clearGroupDelays(groupIndex)
+
                                     val testJob = launch {
                                         withClash {
                                             healthCheck(groupName)
                                         }
                                     }
                                     while (testJob.isActive) {
-                                        delay(400)
+                                        delay(200)
                                         if (!testJob.isActive) break
                                         val group = reloadLock.withPermit {
                                             withClash {
                                                 queryProxyGroup(groupName, uiStore.proxySort)
                                             }
                                         }
-                                        val state = states[groupIndex]
-                                        state.now = group.now
-                                        design.updateGroup(
-                                            groupIndex,
-                                            group.proxies,
-                                            group.type == "Selector",
-                                            state,
-                                            unorderedStates,
-                                            urlTesting = true
-                                        )
+                                        states[groupIndex].now = group.now
+                                        design.updateGroupDelays(groupIndex, group.proxies)
                                     }
                                     testJob.join()
                                 } catch (e: Exception) {

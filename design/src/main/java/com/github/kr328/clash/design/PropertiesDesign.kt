@@ -2,7 +2,6 @@ package com.github.kr328.clash.design
 
 import android.content.Context
 import android.view.View
-import com.github.kr328.clash.common.util.UrlTitleResolver
 import com.github.kr328.clash.core.model.FetchStatus
 import com.github.kr328.clash.design.databinding.DesignPropertiesBinding
 import com.github.kr328.clash.design.dialog.ModelProgressBarConfigure
@@ -94,7 +93,7 @@ class PropertiesDesign(context: Context) : Design<PropertiesDesign.Request>(cont
                 title = context.getText(R.string.name),
                 hint = context.getText(R.string.properties),
                 error = context.getText(R.string.should_not_be_blank),
-                validator = ValidatorAcceptAll
+                validator = if (profile.type == Profile.Type.File) ValidatorNotBlank else ValidatorAcceptAll
             )
 
             if (name != profile.name) {
@@ -117,28 +116,7 @@ class PropertiesDesign(context: Context) : Design<PropertiesDesign.Request>(cont
             )
 
             if (url != profile.source) {
-                val isDefaultOrBlank = profile.name.isBlank() || profile.name == context.getString(R.string.new_profile)
-                val initialExtractedTitle = if (isDefaultOrBlank) {
-                    UrlTitleResolver.extractTitleFromUrl(url)
-                } else {
-                    null
-                }
-
-                profile = profile.copy(
-                    source = url,
-                    name = initialExtractedTitle ?: profile.name
-                )
-
-                if (isDefaultOrBlank) {
-                    launch {
-                        val fetchedTitle = UrlTitleResolver.fetchTitleFromUrl(url)
-                        if (!fetchedTitle.isNullOrBlank()) {
-                            if (profile.name.isBlank() || profile.name == context.getString(R.string.new_profile) || profile.name == initialExtractedTitle) {
-                                profile = profile.copy(name = fetchedTitle)
-                            }
-                        }
-                    }
-                }
+                profile = profile.copy(source = url)
             }
         }
     }

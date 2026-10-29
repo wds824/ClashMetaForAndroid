@@ -48,6 +48,8 @@ class ProxyPageFactory(private val config: ProxyViewConfig) {
             setRecycledViewPool(childrenPool)
 
             clipToPadding = false
+
+            itemAnimator = null
         }
 
         return Holder(recyclerView, root).apply {
