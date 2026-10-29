@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import com.github.kr328.clash.common.constants.Intents
+import com.github.kr328.clash.common.util.UrlTitleResolver
 import com.github.kr328.clash.common.util.intent
 import com.github.kr328.clash.common.util.setUUID
 import com.github.kr328.clash.design.MainDesign
@@ -39,7 +40,9 @@ class ExternalControlActivity : Activity(), CoroutineScope by MainScope() {
                             "file" -> Profile.Type.File
                             else -> Profile.Type.Url
                         }
-                        val name = uri.getQueryParameter("name") ?: getString(R.string.new_profile)
+                        val name = uri.getQueryParameter("name")
+                            ?: UrlTitleResolver.extractTitleFromUrl(url)
+                            ?: getString(R.string.new_profile)
 
                         val parsedInterval = uri.getQueryParameter("update-interval")?.toLongOrNull() ?: 0L
                         val updateInterval = if (parsedInterval > 0) parsedInterval.coerceAtLeast(15L) else 0L

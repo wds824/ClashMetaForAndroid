@@ -3,6 +3,7 @@ package com.github.kr328.clash.service
 import android.content.Context
 import android.net.Uri
 import com.github.kr328.clash.common.log.Log
+import com.github.kr328.clash.common.util.UrlTitleResolver
 import com.github.kr328.clash.core.Clash
 import com.github.kr328.clash.core.model.FetchStatus
 import com.github.kr328.clash.service.data.Imported
@@ -59,9 +60,14 @@ object ProfileProcessor {
                         val updateInterval = subscriptionInfo?.subUpdateInterval
                             ?.takeIf { old == null && snapshot.interval == 0L }
                             ?: snapshot.interval
+                        val resolvedName = if (snapshot.name.isBlank()) {
+                            UrlTitleResolver.extractTitleFromUrl(snapshot.source) ?: snapshot.name
+                        } else {
+                            snapshot.name
+                        }
                         val new = Imported(
                             snapshot.uuid,
-                            snapshot.name,
+                            resolvedName,
                             snapshot.type,
                             snapshot.source,
                             updateInterval,
@@ -206,7 +212,7 @@ object ProfileProcessor {
         val scheme = Uri.parse(source)?.scheme?.lowercase(Locale.getDefault())
 
         when {
-            name.isBlank() -> throw IllegalArgumentException("Empty name")
+            name.isBlank() && UrlTitleResolver.extractTitleFromUrl(source).isNullOrBlank() -> throw IllegalArgumentException("Empty name")
 
             source.isEmpty() && type != Profile.Type.File -> throw IllegalArgumentException("Invalid url")
 

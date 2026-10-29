@@ -6,6 +6,8 @@ import com.github.kr328.clash.core.model.Proxy
 import com.github.kr328.clash.design.ProxyDesign
 import com.github.kr328.clash.design.model.ProxyState
 import com.github.kr328.clash.util.withClash
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
@@ -19,6 +21,7 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
         val states = List(names.size) { ProxyState("?") }
         val unorderedStates = names.indices.map { names[it] to states[it] }.toMap()
         val reloadLock = Semaphore(10)
+        val urlTestJobs = mutableMapOf<Int, Job>()
 
         val design = ProxyDesign(
             this,
@@ -72,12 +75,15 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
 
                                 state.now = group.now
 
+                                val isTesting = urlTestJobs[it.index]?.isActive == true
+
                                 design.updateGroup(
                                     it.index,
                                     group.proxies,
                                     group.type == "Selector",
                                     state,
-                                    unorderedStates
+                                    unorderedStates,
+                                    urlTesting = isTesting
                                 )
                             }
                         }
@@ -91,12 +97,61 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
                             design.requestRedrawVisible()
                         }
                         is ProxyDesign.Request.UrlTest -> {
-                            launch {
-                                withClash {
-                                    healthCheck(names[it.index])
+                            val groupIndex = it.index
+                            val groupName = names.getOrNull(groupIndex) ?: return@onReceive
+                            if (urlTestJobs[groupIndex]?.isActive == true) {
+                                return@onReceive
+                            }
+                            urlTestJobs[groupIndex] = launch {
+                                try {
+                                    val testJob = launch {
+                                        withClash {
+                                            healthCheck(groupName)
+                                        }
+                                    }
+                                    while (testJob.isActive) {
+                                        delay(400)
+                                        if (!testJob.isActive) break
+                                        val group = reloadLock.withPermit {
+                                            withClash {
+                                                queryProxyGroup(groupName, uiStore.proxySort)
+                                            }
+                                        }
+                                        val state = states[groupIndex]
+                                        state.now = group.now
+                                        design.updateGroup(
+                                            groupIndex,
+                                            group.proxies,
+                                            group.type == "Selector",
+                                            state,
+                                            unorderedStates,
+                                            urlTesting = true
+                                        )
+                                    }
+                                    testJob.join()
+                                } catch (e: Exception) {
+                                    // ignore failure
+                                } finally {
+                                    try {
+                                        val group = reloadLock.withPermit {
+                                            withClash {
+                                                queryProxyGroup(groupName, uiStore.proxySort)
+                                            }
+                                        }
+                                        val state = states[groupIndex]
+                                        state.now = group.now
+                                        design.updateGroup(
+                                            groupIndex,
+                                            group.proxies,
+                                            group.type == "Selector",
+                                            state,
+                                            unorderedStates,
+                                            urlTesting = false
+                                        )
+                                    } finally {
+                                        urlTestJobs.remove(groupIndex)
+                                    }
                                 }
-
-                                design.requests.send(ProxyDesign.Request.Reload(it.index))
                             }
                         }
                         is ProxyDesign.Request.PatchMode -> {
