@@ -161,11 +161,21 @@ class ProxyDesign(
     }
 
     fun requestUrlTesting() {
-        if (urlTesting) return
+        val position = binding.pagesView.currentItem
 
         urlTesting = true
 
-        requests.trySend(Request.UrlTest(binding.pagesView.currentItem))
+        // a test may still be winding down for this group; the activity queues a
+        // re-run instead of dropping the click, so always send the request
+        if (requests.trySend(Request.UrlTest(position)).isFailure) {
+            setUrlTesting(position, false)
+        } else {
+            updateUrlTestButtonStatus()
+        }
+    }
+
+    fun setUrlTesting(position: Int, testing: Boolean) {
+        adapter.states[position].urlTesting = testing
 
         updateUrlTestButtonStatus()
     }
