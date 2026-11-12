@@ -54,24 +54,67 @@ jobs:
           sudo update-ca-certificates
           cp -f /etc/ssl/certs/ca-certificates.crt core/src/foss/golang/clash/component/ca/ca-certificates.crt
 
-      - name: Signing properties
+      - name: Setup signing keystore
         env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
-          if [ -n "$SIGNING_STORE_PASSWORD" ]; then
-            touch signing.properties
-            echo keystore.password="$SIGNING_STORE_PASSWORD" > signing.properties
-            echo key.alias="$SIGNING_KEY_ALIAS" >> signing.properties
-            echo key.password="$SIGNING_KEY_PASSWORD" >> signing.properties
-            echo "cat signing.properties"
-            cat signing.properties
+          set -euo pipefail
+
+          missing=""
+          [ -n "${SIGNING_STORE_PASSWORD:-}" ] || missing="$missing SIGNING_STORE_PASSWORD"
+          [ -n "${SIGNING_KEY_ALIAS:-}" ]     || missing="$missing SIGNING_KEY_ALIAS"
+          [ -n "${SIGNING_KEY_PASSWORD:-}" ]  || missing="$missing SIGNING_KEY_PASSWORD"
+          if [ -n "${SIGNING_KEYSTORE_BASE64:-}" ]; then
+            printf '%s' "$SIGNING_KEYSTORE_BASE64" | base64 -d > release.keystore
+          elif [ ! -f release.keystore ]; then
+            missing="$missing SIGNING_KEYSTORE_BASE64"
           fi
+          if [ -n "$missing" ]; then
+            echo "::error title=Signing not configured::Missing secrets:$missing"
+            echo "Without them gradle falls back to the debug keystore, which GitHub regenerates with a random key on every run - so each APK has a different signature and can never update an existing install."
+            echo "Add these repository secrets: SIGNING_KEYSTORE_BASE64 (base64 of your .keystore),"
+            echo "SIGNING_STORE_PASSWORD, SIGNING_KEY_ALIAS, SIGNING_KEY_PASSWORD."
+            exit 1
+          fi
+
+          printf 'keystore.password=%s\nkey.alias=%s\nkey.password=%s\n' \
+            "$SIGNING_STORE_PASSWORD" "$SIGNING_KEY_ALIAS" "$SIGNING_KEY_PASSWORD" > signing.properties
+
+          keytool -list -v -keystore release.keystore \
+            -storepass "$SIGNING_STORE_PASSWORD" -alias "$SIGNING_KEY_ALIAS" \
+            | grep -E "^(Alias name|Valid from|SHA256):" \
+            || { echo "::error::release.keystore does not match SIGNING_STORE_PASSWORD / SIGNING_KEY_ALIAS"; exit 1; }
+          echo "Keystore ready, alias: $SIGNING_KEY_ALIAS"
 
       - name: Pre-release Build
         if: success()
         run: ./gradlew --no-daemon app:assembleAlphaRelease
+
+      - name: Verify APK signing certificate
+        if: success()
+        env:
+          EXPECTED_CERT_SHA256: ${{ secrets.SIGNING_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          APKSIGNER=$(ls -1 "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
+          [ -x "$APKSIGNER" ] || { echo "::error::apksigner not found"; exit 1; }
+
+          shopt -s nullglob
+          apks=(app/build/outputs/apk/alpha/release/*.apk)
+          [ ${#apks[@]} -gt 0 ] || { echo "::error::no APK was produced"; exit 1; }
+
+          for apk in "${apks[@]}"; do
+            cert=$("$APKSIGNER" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+            echo "$(basename "$apk") -> $cert"
+            if [ -n "${EXPECTED_CERT_SHA256:-}" ] && [ "$cert" != "$EXPECTED_CERT_SHA256" ]; then
+              echo "::error file=$apk::signed by $cert, expected $EXPECTED_CERT_SHA256"
+              exit 1
+            fi
+          done
+          echo "All APKs carry the expected signing certificate."
 
       # Delete old Prerelease-alpha
       - uses: dev-drprasad/delete-tag-and-release@v1.1

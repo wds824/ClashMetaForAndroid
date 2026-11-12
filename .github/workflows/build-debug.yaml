@@ -52,29 +52,70 @@ jobs:
           sudo update-ca-certificates
           cp -f /etc/ssl/certs/ca-certificates.crt core/src/foss/golang/clash/component/ca/ca-certificates.crt
 
-      # - name: Signing properties
-      #   env:
-      #     SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
-      #     SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
-      #     SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
-      #   run: |
-      #     touch signing.properties
-      #     echo keystore.password="$SIGNING_STORE_PASSWORD" > signing.properties
-      #     echo key.alias="$SIGNING_KEY_ALIAS" >> signing.properties
-      #     echo key.password="$SIGNING_KEY_PASSWORD" >> signing.properties
-            
-      #     echo "cat signing.properties"
-      #     cat signing.properties
+      # Secrets are unavailable for pull requests from forks, so this workflow
+      # signs only when they are present and says so loudly when they are not.
+      - name: Setup signing keystore
+        id: signing
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${SIGNING_KEYSTORE_BASE64:-}" ]; then
+            printf '%s' "$SIGNING_KEYSTORE_BASE64" | base64 -d > release.keystore
+          fi
+
+          if [ -z "${SIGNING_STORE_PASSWORD:-}" ] || [ -z "${SIGNING_KEY_ALIAS:-}" ] || [ -z "${SIGNING_KEY_PASSWORD:-}" ] || [ ! -f release.keystore ]; then
+            echo "::warning title=Debug signing::Signing secrets unavailable (expected for fork pull requests). This APK will be signed with a throwaway debug key and will NOT be able to update any other build."
+            rm -f signing.properties
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          printf 'keystore.password=%s\nkey.alias=%s\nkey.password=%s\n' \
+            "$SIGNING_STORE_PASSWORD" "$SIGNING_KEY_ALIAS" "$SIGNING_KEY_PASSWORD" > signing.properties
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+          echo "Keystore ready, alias: $SIGNING_KEY_ALIAS"
 
       - name: Build
         if: success()
         run: ./gradlew --no-daemon app:assembleAlphaRelease
+
+      - name: Report APK signing certificate
+        if: success()
+        run: |
+          set -euo pipefail
+          APKSIGNER=$(ls -1 "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
+          [ -x "$APKSIGNER" ] || { echo "::error::apksigner not found"; exit 1; }
+
+          shopt -s nullglob
+          apks=(app/build/outputs/apk/alpha/release/*.apk)
+          [ ${#apks[@]} -gt 0 ] || { echo "::error::no APK was produced"; exit 1; }
+
+          for apk in "${apks[@]}"; do
+            cert=$("$APKSIGNER" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+            echo "$(basename "$apk") -> $cert"
+          done
           
+      - name: Signing summary
+        if: always()
+        run: |
+          if [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
+            echo "### APK signed with the release keystore" >> "$GITHUB_STEP_SUMMARY"
+            echo "It can update any build signed with the same key." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### APK signed with a throwaway debug key" >> "$GITHUB_STEP_SUMMARY"
+            echo "It cannot update any other build - install it after uninstalling the previous one." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Upload Aritfact (universal)
         uses: actions/upload-artifact@v7
         if: ${{  success() }}
         with:
-          name: CMFA Debug Unsigned APK (universal) 
+          name: CMFA alpha APK (universal) 
           path: |
             app/build/outputs/apk/alpha/release/*-universal-*.apk
       
@@ -82,7 +123,7 @@ jobs:
         uses: actions/upload-artifact@v7
         if: ${{  success() }}
         with:
-          name: CMFA Debug Unsigned APK (arm64-v8a)
+          name: CMFA alpha APK (arm64-v8a)
           path: |
             app/build/outputs/apk/alpha/release/*-arm64-v8a-*.apk
       
@@ -90,7 +131,7 @@ jobs:
         uses: actions/upload-artifact@v7
         if: ${{  success() }}
         with:
-          name: CMFA Debug Unsigned APK (armeabi-v7a)
+          name: CMFA alpha APK (armeabi-v7a)
           path: |
             app/build/outputs/apk/alpha/release/*-armeabi-v7a-*.apk
       
@@ -98,7 +139,7 @@ jobs:
         uses: actions/upload-artifact@v7
         if: ${{  success() }}
         with:
-          name: CMFA Debug Unsigned APK (x86_64)
+          name: CMFA alpha APK (x86_64)
           path: |
             app/build/outputs/apk/alpha/release/*-x86_64-*.apk
       
@@ -106,6 +147,6 @@ jobs:
         uses: actions/upload-artifact@v7
         if: ${{  success() }}
         with:
-          name: CMFA Debug Unsigned APK (x86)
+          name: CMFA alpha APK (x86)
           path: |
             app/build/outputs/apk/alpha/release/*-x86-*.apk

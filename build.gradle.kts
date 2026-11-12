@@ -163,7 +163,10 @@ subprojects {
             named("release") {
                 isMinifyEnabled = isApp
                 isShrinkResources = isApp
-                signingConfig = signingConfigs.findByName("release") ?: signingConfigs["debug"]
+                signingConfig = signingConfigs.findByName("release") ?: signingConfigs["debug"].also {
+                    logger.warn("WARNING: signing.properties / release.keystore not found - signing the release build with the DEBUG key.")
+                    logger.warn("WARNING: such an APK cannot update an APK signed with another key, and CI regenerates its debug key on every run.")
+                }
                 proguardFiles(
                     getDefaultProguardFile("proguard-android-optimize.txt"),
                     "proguard-rules.pro"
