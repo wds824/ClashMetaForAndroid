@@ -172,6 +172,9 @@ jobs:
 
       - name: Release Changelog Builder
         uses: mikepenz/release-changelog-builder-action@v6
+        # the release is already published above; a changelog hiccup must not
+        # turn a successful release into a failed run
+        continue-on-error: true
         with:
           configurationJson: |
             {

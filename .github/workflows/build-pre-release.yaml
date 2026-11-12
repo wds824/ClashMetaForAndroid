@@ -14,6 +14,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v6
         with:
+          # the release changelog builder runs `git describe --tags`, which needs
+          # history and tags the default shallow clone does not fetch
+          fetch-depth: 0
+          fetch-tags: true
           token: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Checkout submodules
@@ -141,3 +145,6 @@ jobs:
 
       - name: Release Changelog Builder
         uses: mikepenz/release-changelog-builder-action@v6
+        # the release is already published above; a changelog hiccup must not
+        # turn a successful release into a failed run
+        continue-on-error: true
