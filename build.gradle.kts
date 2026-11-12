@@ -47,7 +47,7 @@ subprojects {
         defaultConfig {
             if (isApp) {
                 val customApplicationId = queryConfigProperty("custom.application.id") as? String?
-                applicationId = customApplicationId.takeIf { it?.isNotBlank() == true } ?: "com.github.metacubex.clash"
+                applicationId = customApplicationId.takeIf { it?.isNotBlank() == true } ?: "com.demo.net.tool"
             }
 
             project.name.let { name ->
@@ -96,7 +96,9 @@ subprojects {
         productFlavors {
             flavorDimensions("feature")
 
-            val removeSuffix = (queryConfigProperty("remove.suffix") as? String)?.toBoolean() == true
+            // this fork ships a single applicationId; set remove.suffix=false in
+            // local.properties to get the upstream .alpha/.meta suffixes back
+            val removeSuffix = (queryConfigProperty("remove.suffix") as? String)?.toBoolean() ?: true
 
             create("alpha") {
                 isDefault = true
