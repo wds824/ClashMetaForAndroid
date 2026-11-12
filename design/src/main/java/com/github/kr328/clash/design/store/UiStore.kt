@@ -57,6 +57,12 @@ class UiStore(context: Context) {
         values = ProxySort.values()
     )
 
+    // how many rounds the delay test runs per group; results are shown as the maximum
+    var proxyPingTimes: Int by store.int(
+        key = "proxy_ping_times",
+        defaultValue = 1
+    )
+
     var proxyLastGroup: String by store.string(
         key = "proxy_last_group",
         defaultValue = ""

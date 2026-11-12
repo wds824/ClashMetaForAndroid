@@ -18,6 +18,9 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
+private const val UNKNOWN_DELAY = 0xffff
+private const val MAX_PROXY_PING_TIMES = 20
+
 class ProxyActivity : BaseActivity<ProxyDesign>() {
     override suspend fun main() {
         val mode = withClash { queryOverride(Clash.OverrideSlot.Session).mode }
@@ -41,16 +44,41 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
 
         suspend fun runUrlTest(groupIndex: Int, groupName: String) {
             var cancelled = false
+            val maxDelays = HashMap<String, Int>()
 
             try {
                 do {
                     urlTestPending.remove(groupIndex)
+                    maxDelays.clear()
 
                     design.clearGroupDelays(groupIndex)
 
+                    val rounds = uiStore.proxyPingTimes.coerceIn(1, MAX_PROXY_PING_TIMES)
+
                     val testJob = launch {
-                        withClash {
-                            healthCheck(groupName)
+                        repeat(rounds) {
+                            withClash {
+                                healthCheck(groupName)
+                            }
+
+                            if (rounds > 1) {
+                                // keep the worst delay of every proxy across the rounds
+                                val proxies = reloadLock.withPermit {
+                                    withClash {
+                                        queryProxyGroup(groupName, uiStore.proxySort)
+                                    }
+                                }.proxies
+
+                                proxies.forEach { proxy ->
+                                    if (proxy.delay in 1 until UNKNOWN_DELAY) {
+                                        val previous = maxDelays[proxy.name] ?: 0
+
+                                        if (proxy.delay > previous) {
+                                            maxDelays[proxy.name] = proxy.delay
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -102,7 +130,13 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
 
                             design.updateGroup(
                                 groupIndex,
-                                group.proxies,
+                                if (maxDelays.isEmpty()) {
+                                    group.proxies
+                                } else {
+                                    group.proxies.map { proxy ->
+                                        proxy.copy(delay = maxDelays[proxy.name] ?: proxy.delay)
+                                    }
+                                },
                                 group.type == "Selector",
                                 state,
                                 unorderedStates,

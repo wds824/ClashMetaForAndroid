@@ -57,4 +57,16 @@
             </group>
         </menu>
     </item>
+    <item android:title="@string/delay_test">
+        <menu>
+            <group android:checkableBehavior="single">
+                <item
+                    android:id="@+id/delay_test_once"
+                    android:title="@string/delay_test_once" />
+                <item
+                    android:id="@+id/delay_test_max"
+                    android:title="@string/delay_test_max" />
+            </group>
+        </menu>
+    </item>
 </menu>

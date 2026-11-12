@@ -70,6 +70,12 @@ class ProxyMenu(
 
                 requests.trySend(ProxyDesign.Request.ReloadAll)
             }
+            R.id.delay_test_once -> {
+                uiStore.proxyPingTimes = 1
+            }
+            R.id.delay_test_max -> {
+                uiStore.proxyPingTimes = 10
+            }
             R.id.dont_modify -> {
                 requests.trySend(ProxyDesign.Request.PatchMode(null))
             }
@@ -104,6 +110,12 @@ class ProxyMenu(
                 ProxySort.Default -> findItem(R.id.default_).isChecked = true
                 ProxySort.Title -> findItem(R.id.name).isChecked = true
                 ProxySort.Delay -> findItem(R.id.delay).isChecked = true
+            }
+
+            if (uiStore.proxyPingTimes > 1) {
+                findItem(R.id.delay_test_max).isChecked = true
+            } else {
+                findItem(R.id.delay_test_once).isChecked = true
             }
 
             when (mode) {

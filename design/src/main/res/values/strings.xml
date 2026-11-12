@@ -106,6 +106,8 @@
     <string name="new_profile">New Profile</string>
 
     <string name="delay">Delay</string>
+    <string name="delay_test_once">Single</string>
+    <string name="delay_test_max">Max of 10</string>
     <string name="sort">Sort</string>
     <string name="default_">Default</string>
 
