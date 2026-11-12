@@ -14,6 +14,8 @@ import com.github.kr328.clash.design.util.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+private const val UNKNOWN_DELAY = 0xffff
+
 class ProxyPageAdapter(
     private val surface: Surface,
     private val config: ProxyViewConfig,
@@ -28,13 +30,18 @@ class ProxyPageAdapter(
     suspend fun clearDelays(position: Int) {
         withContext(Dispatchers.Main) {
             adapters[position].states.forEach { state ->
-                state.proxy = state.proxy.copy(delay = 0xffff)
+                state.proxy = state.proxy.copy(delay = UNKNOWN_DELAY)
             }
             requestRedrawVisible()
         }
     }
 
-    suspend fun updateDelays(position: Int, proxies: List<Proxy>) {
+    /**
+     * Pushes fresh delays into the list. With [maxOnly] the shown value only ever grows:
+     * the first result is written as-is, later rounds replace it only when bigger, and a
+     * failed round does not blank out a value that was already there.
+     */
+    suspend fun updateDelays(position: Int, proxies: List<Proxy>, maxOnly: Boolean = false) {
         val proxyMap = withContext(Dispatchers.Default) {
             proxies.associateBy { it.name }
         }
@@ -42,9 +49,20 @@ class ProxyPageAdapter(
         withContext(Dispatchers.Main) {
             var changed = false
             adapters[position].states.forEach { state ->
-                val updated = proxyMap[state.proxy.name]
-                if (updated != null && updated.delay != state.proxy.delay) {
-                    state.proxy = updated
+                val updated = proxyMap[state.proxy.name] ?: return@forEach
+                val current = state.proxy.delay
+                val incoming = updated.delay
+
+                val delay = when {
+                    !maxOnly -> incoming
+                    incoming >= UNKNOWN_DELAY -> current
+                    current >= UNKNOWN_DELAY -> incoming
+                    incoming > current -> incoming
+                    else -> current
+                }
+
+                if (delay != current) {
+                    state.proxy = updated.copy(delay = delay)
                     changed = true
                 }
             }

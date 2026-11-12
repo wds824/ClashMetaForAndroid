@@ -82,8 +82,8 @@ class ProxyDesign(
         adapter.clearDelays(position)
     }
 
-    suspend fun updateGroupDelays(position: Int, proxies: List<Proxy>) {
-        adapter.updateDelays(position, proxies)
+    suspend fun updateGroupDelays(position: Int, proxies: List<Proxy>, maxOnly: Boolean = false) {
+        adapter.updateDelays(position, proxies, maxOnly)
     }
 
     suspend fun requestRedrawVisible() {

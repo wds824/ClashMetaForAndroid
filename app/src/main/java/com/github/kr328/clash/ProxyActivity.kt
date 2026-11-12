@@ -96,7 +96,7 @@ class ProxyActivity : BaseActivity<ProxyDesign>() {
 
                             states[groupIndex].now = group.now
 
-                            design.updateGroupDelays(groupIndex, group.proxies)
+                            design.updateGroupDelays(groupIndex, group.proxies, maxOnly = rounds > 1)
                         }
 
                         testJob.join()
